@@ -1,0 +1,16 @@
+torch
+torchaudio
+transformers[torch]
+accelerate>=1.1.0
+librosa
+openai-whisper
+phonemizer
+pandas
+numpy
+scikit-learn
+matplotlib
+tqdm
+evaluate
+jiwer
+textgrid
+g2p_en

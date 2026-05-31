@@ -1,0 +1,10 @@
+.local_memory.md
+.DS_Store
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+data/l2arctic*/
