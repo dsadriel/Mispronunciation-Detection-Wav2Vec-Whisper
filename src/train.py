@@ -143,16 +143,16 @@ def main():
       gradient_accumulation_steps=2,
       dataloader_num_workers=4,
       eval_strategy="steps",
-      num_train_epochs=10,
+      num_train_epochs=60, # Aumentado para ~3 noites de treino
       fp16=False, 
       save_steps=100,
       eval_steps=100,
       logging_steps=25,
-      learning_rate=5e-5,
+      learning_rate=5e-5, # Resetado para permitir progresso além do checkpoint atual
       max_grad_norm=0.5,
       weight_decay=0.005,
       warmup_steps=500,
-      save_total_limit=5,
+      save_total_limit=10, # Mantém mais backups por segurança
     )
 
     # 7. Initialize Trainer

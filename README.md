@@ -21,10 +21,27 @@ O sistema opera através de uma abordagem de alinhamento de sequências:
 Utilizamos o **L2-ARCTIC Corpus**, que contém gravações de falantes não nativos de diversas origens (Árabe, Chinês, Hindi, Coreano, Espanhol, Vietnamita) com anotações manuais detalhadas de erros fonéticos.
 
 ## 🚀 Como Executar
-(Instruções de instalação e execução serão adicionadas conforme o desenvolvimento)
+
+### Pré-requisitos
+- Python 3.10+
+- FFmpeg (para o Whisper)
+- Dependências: `pip install -r requirements.txt`
+
+### Detecção de Erros (Pipeline Completo)
+Para testar o pipeline que integra o Wav2Vec 2.0 (Acústico) e Whisper + G2P (Canônico):
+```bash
+export PYTHONPATH=$PYTHONPATH:.
+python3 src/mispronunciation_detector.py
+```
+
+### Inferência Simples
+Para rodar apenas o reconhecimento acústico de fonemas:
+```bash
+python3 src/inference.py
+```
 
 ## 📄 Declaração de Uso de IA
-Este projeto utiliza o **Gemini CLI** para:
+Este projeto utiliza o **Antigravity CLI** para:
 - Planejamento de arquitetura e roadmap.
 - Geração e refatoração de código de processamento de áudio e alinhamento.
 - Brainstorming de métricas e análise de resultados.

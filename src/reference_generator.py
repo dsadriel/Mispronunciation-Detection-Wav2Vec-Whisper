@@ -6,9 +6,9 @@
 import whisper
 from g2p_en import G2p
 import os
+import re
 from typing import List
 import ssl
-import urllib.request
 import nltk
 
 # Bypass SSL verification for model and nltk downloads
@@ -24,6 +24,20 @@ nltk.download('cmudict', quiet=True)
 nltk.download('averaged_perceptron_tagger_eng', quiet=True)
 nltk.download('averaged_perceptron_tagger', quiet=True)
 
+def simplify_phone(p):
+    if not p:
+        return None
+    # 1. Remover números (acentos tônicos)
+    p = re.sub(r'\d+', '', p)
+    # 2. Remover símbolos especiais
+    p = p.replace('*', '').replace(')', '').replace('_', '').replace('`', '').replace('(', '')
+    # 3. Padronizar para maiúsculas
+    p = p.upper()
+    # 4. Ignorar silêncios, espaços e lixo
+    if p in ['SIL', 'SP', 'SPN', ' ', '']:
+        return None
+    return p
+
 class ReferenceGenerator:
     def __init__(self, whisper_model_size: str = "base"):
         print(f"Loading Whisper model ({whisper_model_size})...")
@@ -36,35 +50,40 @@ class ReferenceGenerator:
         return result['text'].strip()
     
     def to_phonemes(self, text: str) -> List[str]:
-        """Converts text to Arpabet phonemes using g2p_en."""
-        phonemes = self.g2p(text)
-        return [p for p in phonemes if p.strip()]
+        """Converts text to simplified Arpabet phonemes using g2p_en."""
+        raw_phonemes = self.g2p(text)
+        simplified = [simplify_phone(p) for p in raw_phonemes]
+        return [p for p in simplified if p]
 
-    def generate(self, audio_path: str) -> List[str]:
-        """Full pipeline: Audio -> Text -> Phonemes."""
+    def generate(self, audio_path: str) -> str:
+        """Full pipeline: Audio -> Text -> Simplified Phoneme String."""
         text = self.transcribe(audio_path)
         phonemes = self.to_phonemes(text)
-        return phonemes
+        return " ".join(phonemes)
 
 if __name__ == "__main__":
-    print("Testing ReferenceGenerator with a sample audio file (arctic_a0003.wav)...")
+    import sys
+    from src.data_loader import parse_textgrid
+
+    print("Testing ReferenceGenerator with a sample audio file...")
     sample_wav = "data/l2arctic_release_v5.0/ABA/wav/arctic_a0003.wav"
+    ann_path = "data/l2arctic_release_v5.0/ABA/annotation/arctic_a0003.TextGrid"
     
     if os.path.exists(sample_wav):
         generator = ReferenceGenerator()
         
         print(f"\nProcessing: {sample_wav}")
         text = generator.transcribe(sample_wav)
-        print(f"Transcription: {text}")
+        print(f"Whisper Transcription: '{text}'")
         
-        phonemes = generator.to_phonemes(text)
-        print(f"Phonemes: {' '.join(phonemes)}")
+        canonical_phonemes = generator.generate(sample_wav)
+        print(f"Canonical Phonemes: '{canonical_phonemes}'")
         
-        from data_loader import parse_textgrid
-        ann_path = "data/l2arctic_release_v5.0/ABA/annotation/arctic_a0003.TextGrid"
         if os.path.exists(ann_path):
             gt_ann = parse_textgrid(ann_path)
-            gt_phones = [ann['phone'] for ann in gt_ann if ann['phone'] not in ['sil', 'sp']]
-            print(f"Ground Truth: {' '.join(gt_phones)}")
+            # Use 'phone' (target) for ground truth comparison
+            gt_phones = [simplify_phone(ann['phone']) for ann in gt_ann]
+            gt_phones_str = " ".join([p for p in gt_phones if p])
+            print(f"Target Ground Truth: '{gt_phones_str}'")
     else:
         print(f"File not found: {sample_wav}")

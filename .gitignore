@@ -8,3 +8,7 @@ env/
 venv/
 ENV/
 data/l2arctic*/
+wav2vec2-l2arctic-phonemes/
+temp_recording.wav
+*.wav
+
