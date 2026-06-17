@@ -18,7 +18,7 @@ Este documento apresenta a estrutura de slides proposta para a apresentação fi
 ### Slide 1: Capa
 *   **Título**: Detecção Automática de Erros de Pronúncia em Aprendizes L2 de Inglês Baseada em Alinhamento de Sequências com Wav2Vec 2.0 e Whisper
 *   **Subtítulo**: Trabalho Final da Disciplina de Processamento de Linguagem Natural (UFRGS - 2026)
-*   **Autor**: Adriel Dsouza
+*   **Autor**: Adriel de Souza
 *   **Orientadores**: Viviane Moreira e Dennis Giovani Balreira
 *   **Duração Recomendada**: 0:45 min
 
