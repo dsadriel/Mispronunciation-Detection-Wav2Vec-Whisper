@@ -11,4 +11,13 @@ data/l2arctic*/
 wav2vec2-l2arctic-phonemes/
 temp_recording.wav
 *.wav
+*.aux
+*.log
+*.synctex.gz
+*.fdb_latexmk
+*.fls
+*.dvi
+*.bbl
+*.blg
+*.toc
 
