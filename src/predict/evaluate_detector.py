@@ -1,3 +1,11 @@
+"""
+Módulo para avaliação do detector de erros de pronúncia.
+
+Este script carrega o conjunto de teste, executa a inferência e calcula métricas globais
+(acurácia, precisão, revocação, F1-score) e detalhadas por tipo de erro e falante.
+O relatório gerado é salvo em formato Markdown.
+"""
+
 import os
 import sys
 import argparse
@@ -9,16 +17,23 @@ from sklearn.metrics import precision_recall_fscore_support, accuracy_score, con
 # Adicionar a raiz do projeto ao PYTHONPATH
 sys.path.append(os.path.abspath('.'))
 
-from src.mispronunciation_detector import MispronunciationDetector
-from src.data_loader import parse_textgrid
-from src.inference import simplify_phone, run_inference
+from src.predict.mispronunciation_detector import MispronunciationDetector
+from src.utils.data_loader import parse_textgrid
+from src.predict.inference import simplify_phone, run_inference
 
 def evaluate(limit=None):
+    """
+    Avalia o modelo de detecção de erros de pronúncia.
+
+    Args:
+        limit (int, opcional): Número máximo de amostras para avaliar. 
+                               Se None, todas as amostras serão avaliadas.
+    """
     print("="*60)
     print("      TF-PLN: AVALIAÇÃO DO DETECTOR DE ERROS DE PRONÚNCIA")
     print("="*60)
     
-    # 1. Carregar o test split
+    # 1. Carregar o conjunto de teste
     test_csv = "data/test_split.csv"
     if not os.path.exists(test_csv):
         print(f"[ERRO] Arquivo de teste não encontrado em: {test_csv}")
@@ -59,7 +74,7 @@ def evaluate(limit=None):
             continue
             
         try:
-            # A. Carregar anotações manuais (Ground Truth)
+            # A. Carregar anotações manuais (Referência - Ground Truth)
             annotations = parse_textgrid(ann_path)
             canonical_list = []
             gt_labels = []
@@ -119,7 +134,7 @@ def evaluate(limit=None):
                 # Caso haja discrepância de alinhamento rara, ignoramos a amostra para não corromper
                 continue
                 
-            # E. Acumular dados globais e por speaker
+            # E. Acumular dados globais e por falante
             y_true_all.extend(gt_labels)
             y_pred_all.extend(pred_labels)
             
@@ -131,16 +146,16 @@ def evaluate(limit=None):
             # Contagem de tipos de erro detalhados
             for gt_l, pred_l, gt_t, pred_t in zip(gt_labels, pred_labels, gt_types, pred_types):
                 if gt_l == 1 and pred_l == 1:
-                    # True Positive
+                    # Verdadeiro Positivo
                     # Se acertou o tipo de erro específico
                     t = gt_t if gt_t in error_types_stats else 'substitution'
                     error_types_stats[t]['true_pos'] += 1
                 elif gt_l == 0 and pred_l == 1:
-                    # False Positive
+                    # Falso Positivo
                     t = pred_t if pred_t in error_types_stats else 'substitution'
                     error_types_stats[t]['false_pos'] += 1
                 elif gt_l == 1 and pred_l == 0:
-                    # False Negative
+                    # Falso Negativo
                     t = gt_t if gt_t in error_types_stats else 'substitution'
                     error_types_stats[t]['false_neg'] += 1
                     
@@ -194,7 +209,7 @@ def evaluate(limit=None):
     report_lines.append("| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |")
     
     # Mapeamento de falantes para sotaques no L2-ARCTIC
-    # ABA (Arabic), HQTV (Chinese), ERMS (Spanish), SKI (Korean), TLV (Vietnamese), etc.
+    # ABA (Árabe), HQTV (Chinês), ERMS (Espanhol), SKI (Coreano), TLV (Vietnamita), etc.
     # Vamos apenas ordenar por F1-Score decrescente para ver onde o modelo funciona melhor
     speaker_metrics = []
     for spk, data in speaker_results.items():
@@ -227,7 +242,16 @@ def evaluate(limit=None):
     with open(output_report_path, "w") as f:
         f.write("\n".join(report_lines))
         
-    # 7. Print no terminal
+    # 7. Gerar e salvar imagem da Matriz de Confusão
+    output_image_path = "docs/confusion_matrix.png"
+    try:
+        from src.predict.plot_confusion_matrix import plot_confusion_matrix
+        plot_confusion_matrix(tn, fp, fn, tp, save_path=output_image_path)
+        print(f"Matriz de Confusão salva com sucesso em: {output_image_path}")
+    except Exception as e:
+        print(f"[AVISO] Não foi possível gerar a imagem da matriz de confusão: {e}")
+        
+    # 8. Mostrar no terminal
     print("\n" + "="*40)
     print("             RESULTADOS FINAIS")
     print("="*40)

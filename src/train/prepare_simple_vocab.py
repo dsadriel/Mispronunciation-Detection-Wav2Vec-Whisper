@@ -1,12 +1,27 @@
+"""
+Script responsável por gerar um vocabulário simplificado de fonemas para o treinamento.
+Ele extrai os fonemas do conjunto de treino, remove numerais e caracteres especiais, e gera 
+um arquivo JSON contendo o mapeamento desses fonemas para IDs, adicionando tokens especiais.
+"""
 
 import pandas as pd
 import json
 import re
 import os
-from src.data_loader import parse_textgrid
+from src.utils.data_loader import parse_textgrid
 from tqdm import tqdm
 
 def simplify_phone(p):
+    """
+    Simplifica um fonema removendo acentos tônicos (números), símbolos especiais,
+    padronizando para letras maiúsculas e ignorando marcações de silêncio/ruído.
+    
+    Args:
+        p (str): O fonema original a ser simplificado.
+        
+    Returns:
+        str ou None: O fonema simplificado, ou None se for um silêncio/ruído ou vazio.
+    """
     # 1. Remover números (acentos tônicos)
     p = re.sub(r'\d+', '', p)
     # 2. Remover símbolos especiais
@@ -19,6 +34,11 @@ def simplify_phone(p):
     return p
 
 def main():
+    """
+    Função principal que lê o conjunto de dados de treino, extrai as anotações
+    de cada arquivo de áudio, simplifica os fonemas e constrói um novo vocabulário
+    salvando o resultado em um arquivo JSON.
+    """
     df = pd.read_csv("data/train_split.csv")
     unique_phones = set()
     

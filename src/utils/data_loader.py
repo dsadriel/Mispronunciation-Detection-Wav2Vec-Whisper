@@ -1,14 +1,31 @@
+"""
+Módulo responsável por carregar e analisar os dados do dataset L2-ARCTIC.
+Oferece funções para processar arquivos de anotação TextGrid e para
+construir um DataFrame organizado com as informações dos locutores, 
+caminhos dos áudios e caminhos das anotações correspondentes.
+"""
+
 import textgrid
 import os
 import pandas as pd
 from typing import List, Dict, Tuple
 
 def parse_textgrid(file_path: str) -> List[Dict]:
-    """Parses a TextGrid file and extracts phone-level annotations."""
+    """
+    Analisa um arquivo TextGrid e extrai as anotações em nível de fonema.
+
+    Parâmetros:
+        file_path (str): Caminho para o arquivo TextGrid a ser analisado.
+
+    Retorna:
+        List[Dict]: Uma lista de dicionários contendo os dados extraídos dos intervalos.
+                    Cada dicionário contém o tempo de início, fim, fonema alvo, fonema produzido
+                    e o tipo de erro (se houver).
+    """
     try:
         tg = textgrid.TextGrid.fromFile(file_path)
     except Exception as e:
-        print(f"Error reading {file_path}: {e}")
+        print(f"Erro ao ler {file_path}: {e}")
         return []
         
     phone_tier = next((t for t in tg if t.name == 'phones'), None)
@@ -34,7 +51,16 @@ def parse_textgrid(file_path: str) -> List[Dict]:
     return annotations
 
 def get_dataset(data_dir: str) -> pd.DataFrame:
-    """Returns a clean DataFrame with speaker, wav_path and ann_path."""
+    """
+    Retorna um DataFrame limpo contendo informações sobre os locutores, 
+    caminhos dos arquivos de áudio (wav) e caminhos de anotação (TextGrid).
+
+    Parâmetros:
+        data_dir (str): Diretório base contendo os dados dos locutores.
+
+    Retorna:
+        pd.DataFrame: Um DataFrame Pandas com colunas 'speaker', 'file_id', 'wav_path' e 'ann_path'.
+    """
     inventory = []
     speakers = [d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d))]
     
