@@ -1,0 +1,337 @@
+\documentclass[12pt]{article}
+
+\usepackage{sbc-template}
+\usepackage{graphicx,url}
+\usepackage[utf8]{inputenc}
+\usepackage[brazil]{babel}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{amsmath}
+\usepackage{float}
+
+\sloppy
+
+\title{Detecção Automática de Erros de Pronúncia em Aprendizes L2 de Inglês por Alinhamento de Sequências Fonéticas com Wav2Vec 2.0 e Whisper}
+
+\author{Adriel de Souza\inst{1}}
+
+\address{Instituto de Informática -- Universidade Federal do Rio Grande do Sul (UFRGS)\\
+  Porto Alegre -- RS -- Brasil
+  \email{adsouza@inf.ufrgs.br}
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Pronunciation is a determining factor in the intelligibility of English as a second language (L2) speakers. Mispronunciation Detection (MD) systems aim to automatically identify phonetic errors in learner speech, enabling scalable and automated feedback. This work proposes a Transformer-based MD pipeline that integrates Wav2Vec 2.0, fine-tuned for acoustic phoneme recognition, with Whisper and Grapheme-to-Phoneme (G2P) conversion for canonical reference generation. The two phoneme sequences are compared through dynamic alignment based on Levenshtein distance, classifying deviations as substitutions, deletions, or insertions. The system was evaluated on the L2-ARCTIC corpus, achieving an F1-Score of 55.79\% for error detection and a Phone Error Rate (PER) of 17.63\% on the acoustic model. The overall accuracy of 87.02\% is reported but considered secondary due to the severe natural class imbalance of the task. Results indicate that deletions are detected with significantly higher recall (71.8\%) than substitutions (51.1\%), and that vocabulary simplification from 142 to 44 phonetic classes was essential for effective model training.
+\end{abstract}
+
+\begin{resumo}
+A pronúncia é um fator determinante na inteligibilidade de falantes de inglês como segunda língua (L2). Sistemas de Detecção de Erros de Pronúncia (\textit{Mispronunciation Detection} -- MD) buscam identificar automaticamente desvios fonéticos na fala de aprendizes, possibilitando \textit{feedback} automatizado e escalável. Este trabalho propõe um \textit{pipeline} de MD baseado em Transformers que integra o Wav2Vec 2.0, ajustado finamente para reconhecimento acústico de fonemas, com o Whisper e conversão Grafema-para-Fonema (G2P) para geração da referência canônica. As duas sequências de fonemas são comparadas por alinhamento dinâmico baseado na distância de Levenshtein, classificando desvios como substituições, deleções ou inserções. O sistema foi avaliado no corpus L2-ARCTIC, atingindo um F1-Score de 55,79\% na detecção de erros e uma Taxa de Erro Fonético (PER) de 17,63\% no modelo acústico. A acurácia global de 87,02\% é reportada, porém considerada secundária frente ao forte desbalanceamento natural das classes. Os resultados indicam que deleções são detectadas com \textit{recall} significativamente maior (71,8\%) que substituições (51,1\%), e que a simplificação do vocabulário de 142 para 44 classes fonéticas foi essencial para viabilizar o treinamento efetivo do modelo.
+\end{resumo}
+
+
+\section{Introdução} \label{sec:intro}
+
+O inglês é a língua franca global, e a capacidade de se comunicar de forma inteligível nessa língua é uma competência cada vez mais valorizada. A pronúncia desempenha papel central nessa inteligibilidade: conforme demonstrado por \cite{munro1995}, mesmo falantes com sotaque perceptível podem ser altamente compreensíveis, desde que a produção fonética não comprometa a distinção entre fonemas críticos.
+
+Para aprendizes de inglês como segunda língua (L2), o treinamento de pronúncia é tradicionalmente conduzido por tutores humanos, um recurso escasso e de difícil escalabilidade. Nesse contexto, sistemas de treinamento de pronúncia assistidos por computador (\textit{Computer-Assisted Pronunciation Training} -- CAPT) surgem como uma alternativa viável, oferecendo \textit{feedback} automatizado e acessível \cite{witt2000}.
+
+O componente central de um sistema CAPT é a \textit{Mispronunciation Detection} (MD): a capacidade de identificar automaticamente desvios entre a pronúncia do aprendiz e a pronúncia canônica esperada. Esses desvios são tipicamente categorizados em três tipos: \textbf{substituições} (o aprendiz produz um fonema diferente do esperado), \textbf{deleções} (um fonema é omitido) e \textbf{inserções} (um fonema extra é adicionado).
+
+A abordagem clássica para MD é o algoritmo \textit{Goodness of Pronunciation} (GOP), proposto por \cite{witt2000}, que utiliza a probabilidade \textit{a posteriori} de modelos acústicos GMM-HMM treinados em fala nativa para pontuar a qualidade da pronúncia. Embora amplamente adotado como \textit{baseline}, o GOP possui limitações: depende fortemente do alinhamento forçado com o texto de referência e de modelos treinados exclusivamente em fala nativa, o que pode gerar falsos positivos diante da variabilidade acústica natural de falantes L2.
+
+Com o avanço das arquiteturas baseadas em Transformers \cite{vaswani2017} e de modelos de aprendizado auto-supervisionado para fala, como o Wav2Vec 2.0 \cite{baevski2020}, novas possibilidades se abriram para a tarefa de MD. Esses modelos aprendem representações acústicas robustas a partir de grandes volumes de áudio não rotulado, podendo ser ajustados finamente (\textit{fine-tuned}) para reconhecimento de fonemas com quantidades relativamente pequenas de dados anotados \cite{xu2021}.
+
+Este trabalho propõe um \textit{pipeline} de MD que opera sem a necessidade do texto escrito de referência previamente fornecido, tornando-o aplicável inclusive a cenários de fala espontânea. A abordagem integra duas ramificações complementares: (1) uma ramificação \textbf{acústica}, baseada no Wav2Vec 2.0 ajustado finamente no corpus L2-ARCTIC para extrair a sequência de fonemas efetivamente produzida pelo falante; e (2) uma ramificação \textbf{canônica}, que utiliza o Whisper \cite{radford2023} para transcrever o áudio e, em seguida, converte o texto resultante em fonemas via Grafema-para-Fonema (G2P). As duas sequências são alinhadas dinamicamente pela distância de Levenshtein \cite{levenshtein1966}, permitindo a classificação estruturada dos desvios fonéticos.
+
+A avaliação no corpus L2-ARCTIC \cite{zhao2018} demonstrou um F1-Score de 55,79\% na classe de erro (métrica principal adotada para contornar a ilusão de alta acurácia gerada pelo desbalanceamento de classes), com deleções sendo detectadas com \textit{recall} significativamente superior ao de substituições.
+
+O restante deste artigo está organizado da seguinte forma: a Seção~\ref{sec:fundamentacao} apresenta a fundamentação teórica; a Seção~\ref{sec:relacionados} discute os trabalhos relacionados; a Seção~\ref{sec:metodologia} detalha a metodologia proposta; a Seção~\ref{sec:experimentos} apresenta os experimentos e resultados; e a Seção~\ref{sec:conclusao} conclui o trabalho.
+
+
+\section{Fundamentação Teórica} \label{sec:fundamentacao}
+
+Esta seção introduz os conceitos necessários para a compreensão da abordagem proposta.
+
+\subsection{Reconhecimento Automático de Fala}
+
+Sistemas de Reconhecimento Automático de Fala (\textit{Automatic Speech Recognition} -- ASR) convertem sinais acústicos em sequências de texto ou de unidades fonéticas. A evolução desses sistemas percorreu três gerações principais: modelos GMM-HMM (\textit{Gaussian Mixture Model -- Hidden Markov Model}), que dominaram as décadas de 1990 e 2000; modelos híbridos DNN-HMM, que introduziram redes neurais profundas como substituto dos GMMs; e, mais recentemente, modelos \textit{End-to-End} (E2E), que eliminam a necessidade de componentes intermediários ao mapear diretamente o sinal de áudio para a sequência de saída.
+
+Duas métricas são fundamentais para avaliar sistemas ASR: a \textit{Word Error Rate} (WER), que mede a taxa de erro no nível de palavras, e a \textit{Phone Error Rate} (PER), análoga ao WER, porém aplicada ao nível de fonemas individuais. Ambas são calculadas a partir das operações de edição (substituições, deleções e inserções) necessárias para transformar a sequência reconhecida na sequência de referência.
+
+\subsection{Wav2Vec 2.0 e Aprendizado Auto-Supervisionado}
+
+O Wav2Vec 2.0, proposto por \cite{baevski2020}, é um \textit{framework} de aprendizado auto-supervisionado para representações de fala. Sua arquitetura é composta por três componentes principais: (1) um \textit{feature encoder} baseado em convoluções que transforma o áudio bruto em representações latentes; (2) uma rede de contexto baseada na arquitetura Transformer \cite{vaswani2017}, que captura dependências temporais de longo alcance; e (3) um módulo de quantização que discretiza as representações latentes.
+
+Durante o pré-treinamento, o modelo opera por uma tarefa contrastiva: segmentos do áudio são mascarados na camada latente, e o modelo deve identificar a representação quantizada correta dentre um conjunto de distratores. Esse processo permite ao modelo aprender representações acústicas ricas sem qualquer rótulo, utilizando apenas áudio não transcrito.
+
+Para tarefas supervisionadas como o reconhecimento de fonemas, uma camada de classificação linear é adicionada sobre a rede de contexto, e o modelo é ajustado finamente utilizando a perda CTC (\textit{Connectionist Temporal Classification}), proposta por \cite{graves2006}. A perda CTC resolve o problema de alinhamento entre entrada e saída de comprimentos distintos, marginalizando sobre todos os alinhamentos possíveis.
+
+\subsection{Whisper e Conversão Grafema-para-Fonema}
+
+O Whisper, proposto por \cite{radford2023}, é um modelo de ASR do tipo \textit{encoder-decoder} treinado de forma supervisionada em aproximadamente 680 mil horas de áudio multilíngue coletado da \textit{web}. Sua robustez a sotaques, ruído e variações de domínio o torna especialmente útil como componente de transcrição em \textit{pipelines} que processam fala não nativa.
+
+A conversão Grafema-para-Fonema (\textit{Grapheme-to-Phoneme} -- G2P) é o processo de transformar a representação ortográfica de uma palavra em sua transcrição fonética. Neste trabalho, utilizamos a ferramenta \texttt{g2p\_en}, baseada no dicionário CMU Pronouncing Dictionary (CMUdict), que mapeia palavras do inglês para sequências de fonemas no formato ARPAbet.
+
+\subsection{Detecção de Erros de Pronúncia}
+
+A Detecção de Erros de Pronúncia (\textit{Mispronunciation Detection} -- MD) é a tarefa de identificar automaticamente desvios fonéticos na fala de aprendizes L2. Os erros são classificados em três categorias: \textbf{substituição}, quando o fonema produzido difere do esperado; \textbf{deleção}, quando um fonema é omitido; e \textbf{inserção}, quando um fonema adicional é produzido.
+
+A abordagem clássica para MD é o \textit{Goodness of Pronunciation} (GOP), proposto por \cite{witt2000}, que calcula a probabilidade \textit{a posteriori} normalizada pela duração de cada fonema alvo, utilizando modelos acústicos treinados em fala nativa. Abordagens mais recentes empregam modelos de aprendizado auto-supervisionado, como o Wav2Vec 2.0, para extrair representações robustas e realizar a detecção de forma \textit{End-to-End} \cite{xu2021}.
+
+
+\section{Trabalhos Relacionados} \label{sec:relacionados}
+
+A Tabela~\ref{tab:relacionados} apresenta uma comparação entre trabalhos representativos na área de detecção de erros de pronúncia.
+
+\begin{table}[H]
+\centering
+\caption{Comparação entre trabalhos de detecção de erros de pronúncia}
+\label{tab:relacionados}
+\begin{tabular}{@{}p{3.2cm}p{2.5cm}p{2.2cm}p{3.5cm}@{}}
+\toprule
+\textbf{Trabalho} & \textbf{Modelo} & \textbf{Dataset} & \textbf{Método de Detecção} \\
+\midrule
+Witt e Young (2000) & GMM-HMM & Próprio & GOP (prob. posterior) \\
+Zhao et al. (2018) & --- & L2-ARCTIC & \textit{Baseline} com alinhamento forçado \\
+Xu et al. (2021) & Wav2Vec 2.0 & L2-ARCTIC & E2E com \textit{pseudo-labels} \\
+\textbf{Este trabalho} & \textbf{Wav2Vec 2.0 + Whisper} & \textbf{L2-ARCTIC} & \textbf{Alinhamento de sequências} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\cite{witt2000} introduziram o algoritmo GOP, estabelecendo a abordagem \textit{baseline} para MD baseada em probabilidades acústicas posteriores de modelos GMM-HMM. Embora amplamente adotado, o GOP depende de um texto de referência fornecido previamente e de modelos treinados exclusivamente em fala nativa, limitando sua aplicabilidade em cenários onde o texto não está disponível.
+
+\cite{zhao2018} propuseram o corpus L2-ARCTIC, um conjunto de dados de fala não nativa com anotações manuais detalhadas de erros fonéticos por linguistas. O corpus inclui 24 falantes de 6 origens linguísticas distintas e estabeleceu-se como um \textit{benchmark} amplamente utilizado na literatura de MD.
+
+\cite{xu2021} exploraram o uso do Wav2Vec 2.0 para MD no L2-ARCTIC, empregando uma abordagem \textit{End-to-End} com geração de \textit{pseudo-labels} para aumentar o volume de dados de treinamento. Seus resultados demonstraram que modelos auto-supervisionados superam significativamente abordagens tradicionais baseadas em GOP.
+
+O presente trabalho diferencia-se por propor um \textit{pipeline} híbrido que não exige o texto de referência previamente, utilizando o Whisper como transcritor automático para gerar a sequência canônica. Além disso, o sistema opera de forma completamente local, sem dependência de APIs externas, e emprega um vocabulário fonético simplificado (44 classes) que viabiliza o treinamento efetivo em hardware de consumo.
+
+
+\section{Metodologia} \label{sec:metodologia}
+
+Esta seção descreve a arquitetura do \textit{pipeline} proposto para detecção de erros de pronúncia. A Figura~\ref{fig:arquitetura} apresenta uma visão geral do sistema.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.85\textwidth]{diagrama_arquitetura.png}
+\caption{Arquitetura do pipeline de detecção de erros de pronúncia proposto, com duas ramificações (acústica e canônica) convergindo no alinhador dinâmico.}
+\label{fig:arquitetura}
+\end{figure}
+
+\subsection{Visão Geral}
+
+O sistema opera por meio de duas ramificações paralelas que processam o mesmo áudio de entrada: a \textbf{ramificação acústica}, que extrai os fonemas efetivamente produzidos pelo falante, e a \textbf{ramificação canônica}, que gera a sequência de fonemas esperada. As duas sequências resultantes são então comparadas por um alinhador dinâmico que classifica cada posição como correta ou como um dos três tipos de erro.
+
+\subsection{Ramificação Acústica: Wav2Vec 2.0}
+
+A ramificação acústica utiliza o modelo \texttt{facebook/wav2vec2-base}, pré-treinado em 960 horas do corpus LibriSpeech, ajustado finamente para a tarefa de reconhecimento de fonemas no L2-ARCTIC.
+
+Um passo crucial foi a \textbf{simplificação do vocabulário fonético}: o vocabulário original do L2-ARCTIC contém 142 classes distintas (incluindo variantes de acentuação tônica como \texttt{AA0}, \texttt{AA1} e \texttt{AA2}). Essas variantes foram consolidadas em 44 classes base (e.g., \texttt{AA0}, \texttt{AA1} $\rightarrow$ \texttt{AA}), removendo marcadores numéricos de estresse e símbolos acessórios de anotação. A tabela completa com as 44 classes resultantes e a lógica de agrupamento encontra-se detalhada no \textbf{Apêndice A}. Essa simplificação foi determinante para viabilizar o aprendizado: com o vocabulário original de 142 classes, o modelo permanecia estagnado em erro de 100\%.
+
+O ajuste fino foi realizado com os seguintes hiperparâmetros: 25 épocas de treinamento, \textit{batch size} efetivo de 32 (16 por dispositivo com acumulação de gradientes de fator 2), taxa de aprendizado de $5 \times 10^{-5}$, e a opção \texttt{ctc\_zero\_infinity=True} para evitar instabilidades numéricas da perda CTC em hardware Apple Silicon.
+
+\subsection{Ramificação Canônica: Whisper + G2P}
+
+A ramificação canônica opera em dois estágios: primeiro, o modelo Whisper (\texttt{base}) transcreve o áudio em texto; em seguida, a ferramenta \texttt{g2p\_en} converte o texto transcrito em uma sequência de fonemas canônicos no formato ARPAbet simplificado. Essa abordagem elimina a necessidade de fornecer o texto de referência previamente, tornando o \textit{pipeline} aplicável a cenários de fala espontânea.
+
+Cabe ressaltar uma limitação metodológica inerente a essa abordagem: a ramificação canônica depende inteiramente da capacidade do Whisper de atuar como um ``oráculo'' e transcrever corretamente a \textit{intenção} da fala do aprendiz. Se a pronúncia for severamente desviante a ponto de o ASR transcrever uma palavra totalmente diferente, a ferramenta G2P gerará fonemas canônicos incorretos. Esse viés de normalização pode provocar uma cascata de erros no alinhamento, gerando falsos positivos e falsos negativos de detecção. Para embasar esse viés quantitativamente, a avaliação da ramificação canônica (\texttt{Whisper base}) sobre uma amostra aleatória de 150 áudios do conjunto de teste do L2-ARCTIC resultou em um \textit{Word Error Rate} (WER) de \textbf{20,53\%}. Essa métrica materializa estatisticamente a limitação do sistema, indicando que aproximadamente um quinto das palavras gera uma referência canônica imperfeita devido a sotaques densos.
+
+\subsection{Alinhamento e Classificação de Erros}
+
+As duas sequências de fonemas (acústica e canônica) são alinhadas utilizando a distância de Levenshtein, implementada pela biblioteca \texttt{jiwer}. O alinhamento produz pares $(c_i, a_i)$, onde $c_i$ é o fonema canônico e $a_i$ é o fonema acústico na posição alinhada $i$. Cada par é classificado como:
+
+\begin{itemize}
+    \item \textbf{Correto} (\textit{equal}): $c_i = a_i$;
+    \item \textbf{Substituição} (\textit{substitute}): $c_i \neq a_i$, ambos presentes;
+    \item \textbf{Deleção} (\textit{delete}): $c_i$ presente, $a_i$ ausente (fonema omitido);
+    \item \textbf{Inserção} (\textit{insert}): $c_i$ ausente, $a_i$ presente (fonema extra).
+\end{itemize}
+
+\subsection{Dataset e Particionamento}
+
+O corpus L2-ARCTIC v5.0 \cite{zhao2018} contém gravações de 24 falantes não nativos de inglês, com 6 origens linguísticas (L1): árabe, chinês mandarim, hindi, coreano, espanhol e vietnamita. Cada falante contribuiu com aproximadamente 150 sentenças lidas, totalizando 3.631 arquivos de áudio em 16 kHz. As anotações manuais, realizadas por linguistas, registram para cada fonema o alvo esperado, o fonema efetivamente produzido e o tipo de erro (substituição, deleção ou adição).
+
+O dataset foi particionado em 80\% para treinamento e 20\% para teste, com estratificação por falante para garantir a representatividade de todos os sotaques em ambos os conjuntos.
+
+
+\section{Experimentos e Resultados} \label{sec:experimentos}
+
+\subsection{Configuração Experimental}
+
+O treinamento e a avaliação foram realizados em um computador Apple Mac com chip M4 (10 núcleos de CPU, 24 GB de RAM). O tempo total de treinamento do modelo acústico foi de aproximadamente 19 horas. A avaliação do \textit{pipeline} completo de detecção processou 720 áudios do conjunto de teste, totalizando 23.659 fonemas avaliados.
+
+\subsection{Resultados do Modelo Acústico}
+
+A Tabela~\ref{tab:treino} apresenta os resultados do ajuste fino do Wav2Vec 2.0 para reconhecimento de fonemas.
+
+\begin{table}[H]
+\centering
+\caption{Resultados do treinamento do modelo acústico (Wav2Vec 2.0)}
+\label{tab:treino}
+\begin{tabular}{@{}lr@{}}
+\toprule
+\textbf{Métrica} & \textbf{Valor} \\
+\midrule
+Épocas de treinamento & 25 \\
+\textit{Loss} de validação final & 0,3046 \\
+\textit{Phone Error Rate} (PER) & 17,63\% \\
+Acurácia fonética estimada & 82,37\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Um exemplo qualitativo da inferência do modelo ilustra seu comportamento:
+
+\begin{itemize}
+    \item \textbf{Referência:} \texttt{W IY L HH AE W T AH W AO CH AW R CH AE N S AH S}
+    \item \textbf{Predição:}~~\texttt{W IY L HH AE W T AA W AA CH AW R CH AE N S AH S}
+\end{itemize}
+
+O modelo identifica corretamente a maioria dos fonemas, mas confunde o par \texttt{AH}/\texttt{AA}, que são acusticamente próximos.
+
+\subsection{Resultados da Detecção de Erros}
+
+A Tabela~\ref{tab:deteccao} apresenta as métricas globais do \textit{pipeline} de detecção de erros de pronúncia, avaliadas no nível de fonema individual. É fundamental observar que, devido ao severo desbalanceamento natural do domínio (a vasta maioria dos fonemas é pronunciada corretamente pelo aprendiz), a acurácia é uma métrica ilusória e de pouca utilidade analítica. Portanto, a análise do desempenho do sistema deve ser centralizada primariamente no F1-Score, Precisão e \textit{Recall} (Sensibilidade).
+
+\begin{table}[H]
+\centering
+\caption{Métricas globais de detecção de erros de pronúncia}
+\label{tab:deteccao}
+\begin{tabular}{@{}lr@{}}
+\toprule
+\textbf{Métrica} & \textbf{Valor} \\
+\midrule
+Acurácia & 87,02\% \\
+Precisão & 56,62\% \\
+\textit{Recall} (Sensibilidade) & 54,98\% \\
+F1-Score & 55,79\% \\
+\midrule
+Verdadeiros Negativos (TN) & 18.652 \\
+Falsos Positivos (FP) & 1.484 \\
+Falsos Negativos (FN) & 1.586 \\
+Verdadeiros Positivos (TP) & 1.937 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A Figura~\ref{fig:confusao} apresenta a matriz de confusão da detecção.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.45\textwidth]{confusion_matrix.png}
+\caption{Matriz de confusão da detecção. Note que a classe positiva (alvo de detecção do sistema) é o erro de pronúncia (\textit{Mispronunciation}).}
+\label{fig:confusao}
+\end{figure}
+
+\subsection{Análise por Tipo de Erro}
+
+A Tabela~\ref{tab:tipo_erro} detalha o desempenho do sistema para cada tipo de erro fonético.
+
+\begin{table}[H]
+\centering
+\caption{Métricas de detecção por tipo de erro}
+\label{tab:tipo_erro}
+\begin{tabular}{@{}lrrrrrl@{}}
+\toprule
+\textbf{Tipo} & \textbf{TP} & \textbf{FP} & \textbf{FN} & \textbf{Precisão} & \textbf{\textit{Recall}} & \textbf{F1} \\
+\midrule
+Substituição & 1.458 & 1.098 & 1.398 & 0,5704 & 0,5105 & 0,5388 \\
+Deleção      & 479   & 386   & 188   & 0,5538 & 0,7181 & 0,6253 \\
+Inserção$^*$ & - & - & - & N/A & N/A & N/A \\
+\bottomrule
+\multicolumn{7}{l}{\small $^*$ Ver avaliação qualitativa desta classe no texto a seguir.}
+\end{tabular}
+\end{table}
+
+Nota-se na Tabela~\ref{tab:tipo_erro} a ausência de métricas globais para a classe de \textbf{inserção}. Embora a metodologia de alinhamento utilizada classifique fonemas extras de forma robusta, as anotações manuais (\textit{ground truth}) do L2-ARCTIC para esse tipo de desvio (adições) mostraram-se muito menos rigorosas e consistentes em comparação às de substituições e deleções, o que poderia distorcer as métricas agregadas.
+
+Contudo, uma avaliação qualitativa isolada atesta o funcionamento estrutural da arquitetura para inserções. Por exemplo, no áudio \texttt{arctic\_a0040} (falante árabe SKA), o algoritmo de Levenshtein mapeou corretamente a inserção ruidosa da consoante \texttt{G} ao final da fala, onde o canônico estipulava apenas silêncio. De forma análoga, no áudio \texttt{arctic\_a0136} (falante indiano NCC), o sistema identificou a adição intrusiva de uma aproximante \texttt{L} entre transições silábicas. Esses casos corroboram a independência estrutural do sistema em localizar fonemas excedentes, a despeito do viés de anotação do dataset.
+
+Os resultados revelam uma assimetria importante: \textbf{deleções} são detectadas com \textit{recall} de 71,8\%, significativamente superior ao \textit{recall} de 51,1\% para substituições. Esse comportamento é explicável pela natureza do alinhamento: a omissão de um fonema produz uma diferença de comprimento entre as sequências, que é facilmente capturada pelo algoritmo de Levenshtein. Substituições, por outro lado, exigem que o modelo acústico distinga fonemas próximos, o que é intrinsecamente mais difícil.
+
+\subsection{Análise por Falante}
+
+A Tabela~\ref{tab:falantes} apresenta as métricas individuais dos cinco falantes com melhor e pior desempenho (F1-Score), respectivamente.
+
+\begin{table}[H]
+\centering
+\caption{Análise de detecção por falante (extremos de F1-Score)}
+\label{tab:falantes}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+\textbf{Falante} & \textbf{Fonemas} & \textbf{Erros (GT)} & \textbf{Acurácia} & \textbf{Precisão} & \textbf{\textit{Recall}} & \textbf{F1} \\
+\midrule
+TLV   & 914  & 216 & 0,884 & 0,717 & 0,843 & 0,775 \\
+HQTV  & 984  & 270 & 0,863 & 0,765 & 0,722 & 0,743 \\
+THV   & 1006 & 271 & 0,863 & 0,788 & 0,672 & 0,725 \\
+PNV   & 1026 & 170 & 0,889 & 0,663 & 0,671 & 0,667 \\
+LXC   & 985  & 211 & 0,841 & 0,635 & 0,602 & 0,618 \\
+\midrule
+ABA   & 959  & 82  & 0,891 & 0,323 & 0,256 & 0,286 \\
+SVBI  & 951  & 154 & 0,836 & 0,485 & 0,214 & 0,297 \\
+TXHC  & 1069 & 119 & 0,876 & 0,429 & 0,353 & 0,387 \\
+ASI   & 969  & 169 & 0,833 & 0,535 & 0,314 & 0,396 \\
+HKK   & 972  & 79  & 0,880 & 0,339 & 0,506 & 0,406 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Observa-se que falantes vietnamitas (TLV, THV, PNV) apresentam os melhores F1-Scores, possivelmente porque seus padrões de erro são mais sistemáticos e distinguíveis acusticamente. Por outro lado, falantes com menor quantidade de erros anotados (e.g., ABA com apenas 82 erros em 959 fonemas) apresentam F1 mais baixo, sugerindo que a baixa proporção de erros dificulta a detecção precisa.
+
+
+\section{Conclusão} \label{sec:conclusao}
+
+Este trabalho apresentou um \textit{pipeline} de Detecção de Erros de Pronúncia (\textit{Mispronunciation Detection}) baseado em Transformers para aprendizes de inglês como segunda língua. A abordagem integra o Wav2Vec 2.0, ajustado finamente para reconhecimento de fonemas, com o Whisper e conversão G2P para geração da referência canônica, utilizando alinhamento dinâmico por distância de Levenshtein para classificar os desvios fonéticos.
+
+A avaliação no corpus L2-ARCTIC validou a eficácia primária da abordagem com um F1-Score de 55,79\% e PER de 17,63\% (tendo-se a acurácia de 87,02\% como métrica secundária ante o desbalanceamento dos dados). A simplificação do vocabulário fonético de 142 para 44 classes revelou-se o fator mais determinante para viabilizar o aprendizado efetivo do modelo acústico. Os resultados também evidenciaram que deleções são significativamente mais fáceis de detectar (F1 de 0,625) que substituições (F1 de 0,539), devido à assimetria de comprimento capturada naturalmente pelo alinhamento. A presunção do transcritor canônico como "oráculo" foi identificada como o principal gargalo metodológico, limitando o teto de precisão do sistema.
+
+Como trabalhos futuros, destacam-se: (1) a transição de classificação binária (erro/correto) para \textit{scores} contínuos baseados em \textit{Goodness of Pronunciation} (GOP), utilizando probabilidades acústicas posteriores; (2) a exploração de modelos multilíngues de maior capacidade, como o Wav2Vec2-XLSR, para melhorar a robustez a diferentes sotaques; (3) a validação do \textit{pipeline} com falantes brasileiros (L1 português), visando mapear as interferências fonéticas típicas do português no inglês; e (4) a otimização da ramificação canônica, investigando o uso de modelos maiores (como o Whisper Large) ou a aplicação de ajuste fino no transcritor ASR, a fim de mitigar o viés de normalização e reduzir o WER imposto por sotaques densos.
+
+\subsection*{Declaração de Uso de IA Generativa}
+
+Durante o desenvolvimento deste trabalho, ferramentas de inteligência artificial generativa foram utilizadas como apoio nas seguintes atividades: estruturação e planejamento do projeto, auxílio na escrita e refatoração de código-fonte, e discussão de abordagens metodológicas e métricas de avaliação. Todo o conteúdo produzido com o auxílio dessas ferramentas foi revisado, validado e adaptado pelo autor, que assume integral responsabilidade pelo trabalho apresentado.
+
+\bibliographystyle{sbc}
+\bibliography{references}
+
+\appendix
+
+\section{Apêndice A: Mapeamento Fonético (142 para 44 classes)} \label{apendice:mapeamento}
+
+O dataset L2-ARCTIC anota fonemas utilizando uma variação expandida do alfabeto ARPAbet, totalizando 142 classes fonéticas distintas. A vasta maioria dessa expansão deve-se à anotação de \textit{estresse lexical} (tonicidade) nas vogais, utilizando sufixos numéricos (0 para átona, 1 para tônica primária, 2 para tônica secundária), além de alguns símbolos acessórios esparsos de anotação.
+
+Para viabilizar o treinamento do modelo acústico com a quantidade de dados disponíveis (evitando a dispersão de exemplos por classe), aplicamos uma heurística de consolidação que remove todos os sufixos numéricos das vogais, colapsando as variantes para sua \textbf{classe base}. A Tabela \ref{tab:mapeamento} apresenta as 44 classes base resultantes que compõem o vocabulário final do modelo Wav2Vec 2.0.
+
+\begin{table}[H]
+\centering
+\caption{Vocabulário simplificado de 44 classes fonéticas (ARPAbet base)}
+\label{tab:mapeamento}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Categoria} & \textbf{Classes Base Resultantes (Agrupamentos de Variantes)} \\
+\midrule
+Vogais & \texttt{AA}, \texttt{AE}, \texttt{AH}, \texttt{AO}, \texttt{AW}, \texttt{AY}, \texttt{EH}, \texttt{ER}, \texttt{EY}, \texttt{IH}, \texttt{IY}, \texttt{OW}, \texttt{OY}, \texttt{UH}, \texttt{UW} \\
+\midrule
+Oclusivas & \texttt{B}, \texttt{D}, \texttt{G}, \texttt{P}, \texttt{T}, \texttt{K} \\
+\midrule
+Fricativas & \texttt{DH}, \texttt{F}, \texttt{HH}, \texttt{S}, \texttt{SH}, \texttt{TH}, \texttt{V}, \texttt{Z}, \texttt{ZH} \\
+\midrule
+Africadas & \texttt{CH}, \texttt{JH} \\
+\midrule
+Nasais & \texttt{M}, \texttt{N}, \texttt{NG} \\
+\midrule
+Aproximantes & \texttt{L}, \texttt{R}, \texttt{W}, \texttt{Y} \\
+\midrule
+Especiais & \texttt{SIL} (Silêncio/Pausa), \texttt{SPN} (\textit{Spoken Noise}) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textit{Exemplo de agrupamento:} As classes originais \texttt{AH0}, \texttt{AH1} e \texttt{AH2} foram todas mapeadas para a classe única \texttt{AH}. Classes puramente consoantes (como \texttt{B}, \texttt{CH}, \texttt{D}) mantiveram-se inalteradas na conversão (mapeamento 1:1).
+
+\end{document}
